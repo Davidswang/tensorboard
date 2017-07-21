@@ -37,7 +37,7 @@ import numpy as np
 from tensorboard.plugins.histogram import metadata
 
 
-BUCKETS = 30
+DEFAULT_BUCKET_COUNT = 30
 
 
 def _buckets(data, bucket_count=None):
@@ -52,22 +52,10 @@ def _buckets(data, bucket_count=None):
     The value of `k` is either `bucket_count` or `1` or `0`.
   """
   if bucket_count is None:
-    bucket_count = BUCKETS
-  known_nonpositive = False
-  if tf.is_numeric_tensor(bucket_count):
-    const = tf.contrib.util.constant_value(bucket_count)
-    known_nonpositive = const is not None and const <= 0
-  else:
-    known_nonpositive = bucket_count <= 0
-  if known_nonpositive:
-    raise ValueError('assertion failed: "bucket_count" must be positive, '
-                     'but was %s' % bucket_count)
+    bucket_count = DEFAULT_BUCKET_COUNT
   with tf.name_scope('buckets', values=[data, bucket_count]), \
-       tf.control_dependencies([
-         tf.assert_scalar(bucket_count),
-         tf.assert_type(bucket_count, tf.int32),
-         tf.assert_positive(bucket_count,
-                            message='"bucket_count" must be positive')]):
+       tf.control_dependencies([tf.assert_scalar(bucket_count),
+                                tf.assert_type(bucket_count, tf.int32)]):
     data = tf.reshape(data, shape=[-1])  # flatten
     data = tf.cast(data, tf.float64)
     is_empty = tf.equal(tf.size(data), 0)
@@ -121,10 +109,12 @@ def op(name,
     name: A unique name for the generated summary node.
     data: A `Tensor` of any shape. Must be compatible with `float64`.
     bucket_count: Optional positive `int` or scalar `int32` `Tensor`.
-    display_name: Optional name for this summary in TensorBoard.
-      Defaults to `name`.
-    description: Optional long-form description for this summary.
-      Markdown is supported.
+      (See the module-level docstring for edge cases regarding buckets
+      when there is no data or data takes only one value.)
+    display_name: Not yet supported; do not use. (Eventually: Optional
+      name for this summary in TensorBoard. Defaults to `name`.)
+    description: Not yet supported; do not use. (Eventually: Optional
+      long-form description for this summary. Markdown is supported.)
     collections: Optional list of graph collections keys. The new
       summary op is added to these collections. Defaults to
       `[Graph Keys.SUMMARIES]`.
@@ -152,17 +142,16 @@ def pb(name, data, bucket_count=None, display_name=None, description=None):
       name scopes.
     data: A `np.array` or array-like form of any shape. Must have type
       compatible with `float`.
-    bucket_count: Optional positive `int`.
-    display_name: Optional name for this summary in TensorBoard.
-      Defaults to `name`.
-    description: Optional long-form description for this summary.
-      Markdown is supported.
+    bucket_count: Optional positive `int`. (See the module-level
+      docstring for edge cases regarding buckets when there is no data
+      or data takes only one value.)
+    display_name: Not yet supported; do not use. (Eventually: Optional
+      name for this summary in TensorBoard. Defaults to `name`.)
+    description: Not yet supported; do not use. (Eventually: Optional
+      long-form description for this summary. Markdown is supported.)
   """
   if bucket_count is None:
-    bucket_count = BUCKETS
-  if bucket_count <= 0:
-    raise ValueError('assertion failed: "bucket_count" must be positive, '
-                     'but was %s' % bucket_count)
+    bucket_count = DEFAULT_BUCKET_COUNT
   data = np.array(data).flatten().astype(float)
   if data.size == 0:
     buckets = np.array([]).reshape((0, 3))

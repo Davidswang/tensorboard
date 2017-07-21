@@ -97,12 +97,12 @@ class HistogramsPlugin(base_plugin.TBPlugin):
       tensor_events = self._multiplexer.Tensors(run, tag)
     except KeyError:
       try:
-        tensor_events = self._multiplexer.Histograms(run, tag)
+        old_style_events = self._multiplexer.Histograms(run, tag)
       except KeyError:
         pass
       else:
         tensor_events = [self._convert_old_style_histogram_event(ev)
-                         for ev in tensor_events]
+                         for ev in old_style_events]
     if tensor_events is None:
       raise ValueError('No histogram tag %r for run %r' % (tag, run))
     return ([[ev.wall_time, ev.step, tf.make_ndarray(ev.tensor_proto).tolist()]

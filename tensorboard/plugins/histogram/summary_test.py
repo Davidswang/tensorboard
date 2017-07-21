@@ -45,10 +45,10 @@ class SummaryTest(tf.test.TestCase):
     actual_proto.ParseFromString(actual_pbtxt)
     return actual_proto
 
-  def get_summary_pb(self, name='nemo', data=None, bucket_count=None,
-                     display_name=None, description=None,
-                     data_tensor=None, bucket_count_tensor=None,
-                     feed_dict=None):
+  def compute_summary_pb(self, name='nemo', data=None, bucket_count=None,
+                         display_name=None, description=None,
+                         data_tensor=None, bucket_count_tensor=None,
+                         feed_dict=None):
     """Use both `op` and `pb` to get a summary, asserting equality.
 
     Returns:
@@ -71,7 +71,7 @@ class SummaryTest(tf.test.TestCase):
   def test_metadata(self):
     # We're going to assume that the basic metadata is handled the same
     # across all data cases (unless explicitly changed).
-    pb = self.get_summary_pb(name='widgets')
+    pb = self.compute_summary_pb(name='widgets')
     self.assertEqual(len(pb.value), 1)
     self.assertEqual(pb.value[0].tag, 'widgets/histogram_summary')
     summary_metadata = pb.value[0].metadata
@@ -84,9 +84,9 @@ class SummaryTest(tf.test.TestCase):
   def test_explicit_display_name_and_description(self):
     display_name = 'Widget metrics'
     description = 'Tracks widget production; *units*: MacGuffins/hr'
-    pb = self.get_summary_pb(name='widgets',
-                             display_name=display_name,
-                             description=description)
+    pb = self.compute_summary_pb(name='widgets',
+                                 display_name=display_name,
+                                 description=description)
     summary_metadata = pb.value[0].metadata
     plugin_data = summary_metadata.plugin_data[0]
     content = metadata.parse_summary_metadata(plugin_data.content)
@@ -94,29 +94,29 @@ class SummaryTest(tf.test.TestCase):
     self.assertEqual(content.description, description)
 
   def test_empty_input(self):
-    pb = self.get_summary_pb('nothing_to_see_here', [])
+    pb = self.compute_summary_pb('nothing_to_see_here', [])
     buckets = tf.make_ndarray(pb.value[0].tensor)
     np.testing.assert_allclose(buckets, np.array([]).reshape((0, 3)))
 
   def test_empty_input_of_high_rank(self):
-    pb = self.get_summary_pb('move_along', [[[], []], [[], []]])
+    pb = self.compute_summary_pb('move_along', [[[], []], [[], []]])
     buckets = tf.make_ndarray(pb.value[0].tensor)
     np.testing.assert_allclose(buckets, np.array([]).reshape((0, 3)))
 
   def test_singleton_input(self):
-    pb = self.get_summary_pb('twelve', [12])
+    pb = self.compute_summary_pb('twelve', [12])
     buckets = tf.make_ndarray(pb.value[0].tensor)
     np.testing.assert_allclose(buckets, np.array([[11.5, 12.5, 1]]))
 
   def test_input_with_all_same_values(self):
-    pb = self.get_summary_pb('twelven', [12, 12, 12])
+    pb = self.compute_summary_pb('twelven', [12, 12, 12])
     buckets = tf.make_ndarray(pb.value[0].tensor)
     np.testing.assert_allclose(buckets, np.array([[11.5, 12.5, 3]]))
 
   def test_normal_input(self):
     bucket_count = 44
-    pb = self.get_summary_pb(data=self.gaussian.reshape((5, -1)),
-                             bucket_count=bucket_count)
+    pb = self.compute_summary_pb(data=self.gaussian.reshape((5, -1)),
+                                 bucket_count=bucket_count)
     buckets = tf.make_ndarray(pb.value[0].tensor)
     self.assertEqual(buckets[:, 0].min(), self.gaussian.min())
     self.assertEqual(buckets[:, 1].max(), self.gaussian.max())
@@ -126,48 +126,19 @@ class SummaryTest(tf.test.TestCase):
   def test_when_shape_not_statically_known(self):
     placeholder = tf.placeholder(tf.float64, shape=None)
     reshaped = self.gaussian.reshape((25, -1))
-    self.get_summary_pb(data=reshaped,
-                        data_tensor=placeholder,
-                        feed_dict={placeholder: reshaped})
+    self.compute_summary_pb(data=reshaped,
+                            data_tensor=placeholder,
+                            feed_dict={placeholder: reshaped})
     # The proto-equality check is all we need.
 
   def test_when_bucket_count_not_statically_known(self):
     placeholder = tf.placeholder(tf.int32, shape=())
     bucket_count = 44
-    pb = self.get_summary_pb(bucket_count=bucket_count,
-                             bucket_count_tensor=placeholder,
-                             feed_dict={placeholder: bucket_count})
+    pb = self.compute_summary_pb(bucket_count=bucket_count,
+                                 bucket_count_tensor=placeholder,
+                                 feed_dict={placeholder: bucket_count})
     buckets = tf.make_ndarray(pb.value[0].tensor)
     self.assertEqual(buckets.shape, (bucket_count, 3))
-
-  def test_op_forbids_zero_bucket_count(self):
-    with six.assertRaisesRegex(self, ValueError,
-                               '"bucket_count" must be positive'):
-      summary.op('no_buckets', tf.constant(self.gaussian), bucket_count=0)
-
-  def test_op_forbids_negative_bucket_count(self):
-    with six.assertRaisesRegex(self, ValueError,
-                               '"bucket_count" must be positive'):
-      summary.op('stekcub', tf.constant(self.gaussian), bucket_count=-1)
-
-  def test_op_forbids_dynamic_negative_bucket_count(self):
-    placeholder = tf.placeholder(tf.int32, shape=())
-    bucket_count = -33
-    op = summary.op('stekcub_ebyam', tf.constant(self.gaussian), placeholder)
-    with six.assertRaisesRegex(self, Exception,  # InvalidArgumentError
-                               '"bucket_count" must be positive'):
-      tf.Session().run(op, feed_dict={placeholder: bucket_count})
-
-  def test_pb_forbids_zero_bucket_count(self):
-    with six.assertRaisesRegex(self, ValueError,
-                               '"bucket_count" must be positive'):
-      summary.pb('no_buckets', self.gaussian, bucket_count=0)
-
-  def test_pb_forbids_negative_bucket_count(self):
-    with six.assertRaisesRegex(self, ValueError,
-                               '"bucket_count" must be positive'):
-      summary.pb('stekcub', self.gaussian, bucket_count=-2)
-
 
 if __name__ == '__main__':
   tf.test.main()
